@@ -12,7 +12,7 @@ byte triggerMT = 1;
 byte triggerST = 2;
 
 // SleepTime in ms - max 255
-unsigned int sleepTime = 2000;
+byte sleepTime = 50;
 
 // SoftHard Threshold 0 - 1
 float hardHitThresh = 0.5;
