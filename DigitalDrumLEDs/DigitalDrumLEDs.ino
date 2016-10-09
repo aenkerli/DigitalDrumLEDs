@@ -11,21 +11,26 @@ byte triggerBD = 0;
 byte triggerMT = 1;
 byte triggerST = 2;
 
-// Hit variables
-int hitBD = 512; // 0-Point is on 512
-int hitMT = 512; // 0-Point is on 512
-int hitST = 512; // 0-Point is on 512
-
 // SleepTime in ms - max 255
-byte sleepTime = 70;
+int sleepTime = 2000;
 
 // Threshold values BD=Bassdrum, MT=MidTom, SM=SmallTom
-int thresholdBDmax = 750;
-int thresholdBDmin = 250;
-int thresholdMTmax = 750;
-int thresholdMTmin = 250;
-int thresholdSTmax = 750;
-int thresholdSTmin = 250;
+unsigned int thresholdBDmax = 750;
+unsigned int thresholdBDmin = 350;
+unsigned int thresholdMTmax = 750;
+unsigned int thresholdMTmin = 350;
+unsigned int thresholdSTmax = 750;
+unsigned int thresholdSTmin = 350;
+
+
+/*
+ * Do not make any changes after this point
+ */
+
+// Hit variables
+unsigned int hitBD = 512; // 0-Point is on 512
+unsigned int hitMT = 512; // 0-Point is on 512
+unsigned int hitST = 512; // 0-Point is on 512
 
 /*
  * States:
@@ -38,6 +43,8 @@ byte lastStateBD = 0;
 byte lastStateMT = 0;
 byte lastStateST = 0;
 
+// Last hit time
+unsigned long lastHitTime[3] = {0,0,0};
  
 void setup() {
 
@@ -52,11 +59,6 @@ void loop() {
   byte hitBD = hitdetection(triggerBD, thresholdBDmax, thresholdBDmin);
   byte hitMT = hitdetection(triggerMT, thresholdMTmax, thresholdMTmin);
   byte hitST = hitdetection(triggerST, thresholdSTmax, thresholdSTmin);
-  Serial.print(hitBD);
-  Serial.print(hitMT);
-  Serial.println(hitST); 
-
-
 
 }
 
@@ -76,23 +78,39 @@ void loop() {
  */
 byte hitdetection(byte triggerSource, int thresMax, int thresMin) {
 
-  static int triggerValue = 512;
-  static byte hit = 0;
+  int unsigned triggerValue = 512;
+  byte hit = 0;
+  unsigned long now = millis();
+  unsigned long diffTime = now - lastHitTime[triggerSource];
 
-  // Check hit
-  triggerValue = analogRead(triggerSource);
-
-  // Check if a hit was hitten
-  if ((triggerValue > thresMax) || (triggerValue < thresMin)) {
-
-    //check force
-    //if ( triggerValue
-
-    hit = 1;
-        
-  }
-
-  return hit;
+/*
+  Serial.print(triggerSource);Serial.print(":::");
+  Serial.print(now);Serial.print(",");
+  Serial.print(lastHitTime[triggerSource]);Serial.print(",");
+  Serial.print(diffTime);Serial.print(",");
+*/
   
+  //Check sleeptime
+  if ( (lastHitTime[triggerSource] == 0) || ((now - lastHitTime[triggerSource]) > sleepTime)) {
+
+    Serial.print("Input Auslesen:");
+    // Get analog input value
+    triggerValue = analogRead(triggerSource);
+    Serial.print(triggerValue);
+    // Check if a hit was hitten
+    if ((triggerValue > thresMax) || (triggerValue < thresMin)) {
+  
+      //check force
+      //if ( triggerValue
+      Serial.print("Schlag registriert");
+      hit = 1;
+      lastHitTime[triggerSource] = now;
+      
+    }
+  }
+  
+  Serial.println("");
+  return hit;
+
 }
 
