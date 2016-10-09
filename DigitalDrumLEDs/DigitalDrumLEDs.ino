@@ -12,7 +12,10 @@ byte triggerMT = 1;
 byte triggerST = 2;
 
 // SleepTime in ms - max 255
-int sleepTime = 2000;
+unsigned int sleepTime = 2000;
+
+// SoftHard Threshold 0 - 1
+float hardHitThresh = 0.5;
 
 // Threshold values BD=Bassdrum, MT=MidTom, SM=SmallTom
 unsigned int thresholdBDmax = 750;
@@ -45,6 +48,11 @@ byte lastStateST = 0;
 
 // Last hit time
 unsigned long lastHitTime[3] = {0,0,0};
+
+
+
+
+
  
 void setup() {
 
@@ -76,41 +84,53 @@ void loop() {
  * 2 = hard
  * 
  */
-byte hitdetection(byte triggerSource, int thresMax, int thresMin) {
+byte hitdetection(byte triggerSource, unsigned int thresMax, unsigned int thresMin) {
 
   int unsigned triggerValue = 512;
   byte hit = 0;
   unsigned long now = millis();
-  unsigned long diffTime = now - lastHitTime[triggerSource];
 
 /*
   Serial.print(triggerSource);Serial.print(":::");
   Serial.print(now);Serial.print(",");
   Serial.print(lastHitTime[triggerSource]);Serial.print(",");
-  Serial.print(diffTime);Serial.print(",");
 */
   
   //Check sleeptime
   if ( (lastHitTime[triggerSource] == 0) || ((now - lastHitTime[triggerSource]) > sleepTime)) {
+    /*
+     * Sleeptime not active, check hit
+     */
 
-    Serial.print("Input Auslesen:");
     // Get analog input value
-    triggerValue = analogRead(triggerSource);
-    Serial.print(triggerValue);
+    unsigned int triggerValue = analogRead(triggerSource);
+
     // Check if a hit was hitten
     if ((triggerValue > thresMax) || (triggerValue < thresMin)) {
-  
-      //check force
-      //if ( triggerValue
-      Serial.print("Schlag registriert");
-      hit = 1;
-      lastHitTime[triggerSource] = now;
-      
-    }
-  }
-  
-  Serial.println("");
-  return hit;
+      /*
+       * hit, detected, check the it's a hard hit else it's soft
+       */
 
+      // Callculate hard threshold
+      unsigned int hardThreshMax = thresMax + ((1023 - thresMax) * hardHitThresh);
+      unsigned int hardThreshMin = thresMin - (thresMin * hardHitThresh);
+      
+      if ((triggerValue > hardThreshMax) || (triggerValue < hardThreshMin)) {
+        
+        hit = 2;
+        
+      }
+      else {
+      
+        hit = 1;
+      
+      }
+
+      lastHitTime[triggerSource] = now;
+    }
+  
+    return hit;
+  
+  }
 }
 
