@@ -5,6 +5,19 @@
  * Version: 0.1
  */
 
+ /*
+  * Do not make any changes at the includes
+  */
+  
+#include <Adafruit_NeoPixel.h>
+#ifdef __AVR__
+  #include <avr/power.h>
+#endif
+
+/*
+ * Congfiguration Section
+ */
+
 // Global Variables
 // Define Analog Inputs
 byte triggerBD = 0;
@@ -42,31 +55,62 @@ unsigned int hitST = 512; // 0-Point is on 512
  * 2 = hard
  * 3 = sleep
  */
-byte lastStateBD = 0;
-byte lastStateMT = 0;
-byte lastStateST = 0;
+// Hit State
+byte hitStates[3] = {0,0,0};
 
 // Last hit time
 unsigned long lastHitTime[3] = {0,0,0};
 
+/*
+ * ProgrammModus
+ * 
+ * 0 = Blink
+ * 1 = Szene
+ * 2 = Pattern
+ */
+ byte selectedModus = 0;
 
+/*
+ * runState
+ * 
+ * 0 = norun
+ * 1 = running
+ */
+ byte runState[2] = {0,0};
 
+/*
+ * Neopixel Vraiables
+ */
 
-
+// Define the Pixels
+Adafruit_NeoPixel pixBD = Adafruit_NeoPixel(72, 2, NEO_RGBW + NEO_KHZ800);
+Adafruit_NeoPixel pixST = Adafruit_NeoPixel(60, 3, NEO_RGBW + NEO_KHZ800);
+Adafruit_NeoPixel pixMT = Adafruit_NeoPixel(60, 4, NEO_RGBW + NEO_KHZ800);
  
 void setup() {
 
- Serial.begin(9600);          //  setup serial
+ //Serial.begin(9600);          //  setup serial
 
+ // Initialize the Neopixels
+  pixBD.begin(); // This initializes the NeoPixel library.
+  pixBD.show(); // Initialize all pixels to 'off'
+  
+  pixST.begin(); // This initializes the NeoPixel library.
+  pixST.show(); // Initialize all pixels to 'off'
+  
+  pixMT.begin(); // This initializes the NeoPixel library.
+  pixMT.show(); // Initialize all pixels to 'off'
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
 
   //Check BD
-  byte hitBD = hitdetection(triggerBD, thresholdBDmax, thresholdBDmin);
-  byte hitMT = hitdetection(triggerMT, thresholdMTmax, thresholdMTmin);
-  byte hitST = hitdetection(triggerST, thresholdSTmax, thresholdSTmin);
+  hitStates[0] = hitdetection(triggerBD, thresholdBDmax, thresholdBDmin);
+  hitStates[1] = hitdetection(triggerMT, thresholdMTmax, thresholdMTmin);
+  hitStates[2] = hitdetection(triggerST, thresholdSTmax, thresholdSTmin);
+
+  programmcontroller(hitStates);
 
 }
 
@@ -133,4 +177,49 @@ byte hitdetection(byte triggerSource, unsigned int thresMax, unsigned int thresM
   
   }
 }
+
+void programmcontroller(byte hitState[3]){
+
+// first select programm
+
+  switch (selectedModus) {
+
+    case 0: //blink
+      for (int trigger = 0; trigger < 3; trigger++){
+        
+        if (runState[trigger] == 0){ //not Running
+          
+          if (hitState[trigger] == 0){// no hit detected
+            break;
+          }
+          //start new programm with step 1
+          
+        }
+        else{ // running
+          // next Step
+        }
+      }
+    break;
+    
+    case 1: //szene
+    break;
+    
+    case 2: //pattern
+    break;
+    
+    default:
+    break;
+  }
+}
+
+/*
+ * FX Section
+ */
+
+void FX_1(){
+
+  pixST.setPixelColor(i, pixels.Color(0,0,255,0));
+  
+}
+
 
