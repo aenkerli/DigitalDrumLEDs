@@ -15,14 +15,19 @@
 #endif
 
 /*
- * Congfiguration Section
+ * Global Congfiguration Section
  */
 
 // Global Variables
-// Define Analog Inputs
+// Set Analog Inputs
 byte triggerBD = 0;
 byte triggerMT = 1;
 byte triggerST = 2;
+
+// Set Digital Output
+byte pinOutBD = 2;
+byte pinOutST = 3;
+byte pinOutMT = 4;
 
 // SleepTime in ms - max 255
 byte sleepTime = 50;
@@ -31,6 +36,12 @@ byte sleepTime = 50;
 float hardHitThresh = 0.5;
 
 // Threshold values BD=Bassdrum, MT=MidTom, SM=SmallTom
+
+//Threshold in %
+byte hitThresholdBD = 50;
+byte hitThresholdST = 50;
+byte hitThresholdMT = 50;
+
 unsigned int thresholdBDmax = 750;
 unsigned int thresholdBDmin = 350;
 unsigned int thresholdMTmax = 750;
@@ -42,11 +53,6 @@ unsigned int thresholdSTmin = 350;
 /*
  * Do not make any changes after this point
  */
-
-// Hit variables
-unsigned int hitBD = 512; // 0-Point is on 512
-unsigned int hitMT = 512; // 0-Point is on 512
-unsigned int hitST = 512; // 0-Point is on 512
 
 /*
  * States:
@@ -78,104 +84,225 @@ unsigned long lastHitTime[3] = {0,0,0};
  */
  byte runState[2] = {0,0};
 
+
 /*
- * Neopixel Vraiables
+ * Classes Section
  */
 
-// Define the Pixels
-Adafruit_NeoPixel pixBD = Adafruit_NeoPixel(72, 2, NEO_RGBW + NEO_KHZ800);
-Adafruit_NeoPixel pixST = Adafruit_NeoPixel(60, 3, NEO_RGBW + NEO_KHZ800);
-Adafruit_NeoPixel pixMT = Adafruit_NeoPixel(60, 4, NEO_RGBW + NEO_KHZ800);
- 
+//Class Hit
+class Hit {
+  byte inputTrigger;
+  byte hitSleepTime;
+  unsigned long lastHitMillis;
+  byte hitThreshold;
+  int maxThreshold;
+  int minThreshold;
+  int nullPoint;
+  
+  public: 
+  Hit(byte inTrigger, byte inSleepTime, byte inThreshold) {
+    inputTrigger = inTrigger;
+    hitSleepTime = inSleepTime;
+    hitThreshold = inThreshold;
+    lastHitMillis = 0;
+  }
+
+  void initialize() {
+
+  //Getnullpoint and callculate Threshold 
+    /* Schleife 5 mal je nach 100 ms Wert asulesen und dann alle mitteln
+    triggerValue = analogRead(inputTrigger);
+    */
+  }
+
+  byte detectHit() {
+    
+    /*
+     * Hit-Detection
+     * 
+     * return hit
+     * 0 = none
+     * 1 = soft
+     * 2 = hard
+     * 
+     */
+    unsigned int triggerValue = 512;
+    byte hit = 0;
+    unsigned long currentMillis = millis();
+    
+    /*
+      Serial.print(triggerSource);Serial.print(":::");
+      Serial.print(now);Serial.print(",");
+      Serial.print(lastHitTime[triggerSource]);Serial.print(",");
+    */
+      
+      //Check sleeptime
+      if ( (lastHitTime == 0) || ((currentMillis - lastHitMillis) > sleepTime)) {
+        /*
+         * Sleeptime not active, check hit
+         */
+    
+        // Get analog input value
+        triggerValue = analogRead(inputTrigger);
+    
+        // Check if a hit was hitten
+        if ((triggerValue > maxThreshold) || (triggerValue < minThreshold)) {
+          /*
+           * hit, detected, check the it's a hard hit else it's soft
+           */
+    
+          // Callculate hard threshold
+          unsigned int hardThreshMax = maxThreshold + ((1023 - maxThreshold) * hardHitThresh);
+          unsigned int hardThreshMin = minThreshold - (minThreshold * hardHitThresh);
+          
+          if ((triggerValue > hardThreshMax) || (triggerValue < hardThreshMin)) {
+            
+            hit = 2;
+            
+          }
+          else {
+          
+            hit = 1;
+          
+          }    
+        }
+        lastHitMillis = millis();
+      }
+      return hit;
+  }
+  
+};
+
+
+class Tom {
+
+  int stepFX;
+  int maxSteps;
+  int totalLEDs;
+  bool stateFX; // 1=on, 0=off
+  unsigned long previousMillis;
+  byte waittime;
+  Adafruit_NeoPixel pixels;
+  
+  public:
+  Tom(byte pin, byte LEDcount){
+
+    totalLEDs = LEDcount;
+    pixels = Adafruit_NeoPixel(LEDcount, pin, NEO_RGBW + NEO_KHZ800);   
+    stepFX = 0;
+    stateFX = 1;
+    waittime = 55;
+  }
+
+/*
+ * Effect with Steps
+ */
+  void FX1(unsigned long currentMillis){
+  
+    if (stateFX == 1) {
+          if (stepFX < totalLEDs){
+            pixels.setPixelColor(stepFX, pixels.Color(0,0,255,0));
+            stepFX++;
+          }
+          else if (stepFX == totalLEDs) {
+            previousMillis = millis();
+            pixels.show();
+            stepFX++;   
+          }
+          else if ((stepFX > totalLEDs) && (currentMillis - previousMillis > waittime)){
+            stepFX = 0;
+            stateFX = 0;
+          }
+    }
+    else  {
+
+      switch (stepFX) {
+        case 15:
+          if (currentMillis - previousMillis > waittime) {
+            pixels.setPixelColor(stepFX, pixels.Color(0,0,0,0));
+            pixels.show();
+            stepFX++; 
+          }
+        break;
+        case 30:
+          if (currentMillis - previousMillis > waittime) {
+            pixels.setPixelColor(stepFX, pixels.Color(0,0,0,0));
+            pixels.show();
+            stepFX++; 
+          }
+        break;
+        case 45:
+          if (currentMillis - previousMillis > waittime) {
+            pixels.setPixelColor(stepFX, pixels.Color(0,0,0,0));
+            pixels.show();
+            stepFX++; 
+          }
+        break;
+        case 60:
+          if (currentMillis - previousMillis > waittime) {
+            pixels.setPixelColor(stepFX, pixels.Color(0,0,0,0));
+            pixels.show();
+            stateFX = 1;
+            stepFX = 0; 
+          }
+        break;
+        default:
+          pixels.setPixelColor(stepFX, pixels.Color(0,0,0,0));
+          stepFX++; 
+          previousMillis = millis();
+        break;
+      }
+    }
+  }
+  void start(){
+    pixels.begin(); // This initializes the NeoPixel library.
+    pixels.show(); // Initialize all pixels to 'off'
+  }
+  
+};
+
+class ProgControl {
+  public:
+  ProgControl(){
+    
+  }
+
+  void runProgTom(Tom inTom) {
+    
+  }
+  
+};
+
+// Create the Toms
+Tom smallTom(pinOutST,60);
+Tom middleTom(pinOutMT,60);
+
+// Create Hits
+Hit hitBD(triggerBD,sleepTime,hitThresholdBD);
+Hit hitST(triggerST,sleepTime,hitThresholdST);
+Hit hitMT(triggerMT,sleepTime,hitThresholdMT);
+
 void setup() {
 
  //Serial.begin(9600);          //  setup serial
 
- // Initialize the Neopixels
-  pixBD.begin(); // This initializes the NeoPixel library.
-  pixBD.show(); // Initialize all pixels to 'off'
-  
-  pixST.begin(); // This initializes the NeoPixel library.
-  pixST.show(); // Initialize all pixels to 'off'
-  
-  pixMT.begin(); // This initializes the NeoPixel library.
-  pixMT.show(); // Initialize all pixels to 'off'
+ // Start the Neopixel
+  smallTom.start();
+  middleTom.start();
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+  // Get current Time
+  unsigned long currentMillis = millis();
 
   //Check BD
+  /*
   hitStates[0] = hitdetection(triggerBD, thresholdBDmax, thresholdBDmin);
   hitStates[1] = hitdetection(triggerMT, thresholdMTmax, thresholdMTmin);
   hitStates[2] = hitdetection(triggerST, thresholdSTmax, thresholdSTmin);
-
+  */
   programmcontroller(hitStates);
 
-}
-
-
-/*
- * Hit-Detection
- * 
- * triggerSource = analog input
- * thresMax = maximum threshold for hit detection
- * thresMin = minimum threshold for hit detection
- * 
- * return hit
- * 0 = none
- * 1 = soft
- * 2 = hard
- * 
- */
-byte hitdetection(byte triggerSource, unsigned int thresMax, unsigned int thresMin) {
-
-  int unsigned triggerValue = 512;
-  byte hit = 0;
-  unsigned long now = millis();
-
-/*
-  Serial.print(triggerSource);Serial.print(":::");
-  Serial.print(now);Serial.print(",");
-  Serial.print(lastHitTime[triggerSource]);Serial.print(",");
-*/
-  
-  //Check sleeptime
-  if ( (lastHitTime[triggerSource] == 0) || ((now - lastHitTime[triggerSource]) > sleepTime)) {
-    /*
-     * Sleeptime not active, check hit
-     */
-
-    // Get analog input value
-    unsigned int triggerValue = analogRead(triggerSource);
-
-    // Check if a hit was hitten
-    if ((triggerValue > thresMax) || (triggerValue < thresMin)) {
-      /*
-       * hit, detected, check the it's a hard hit else it's soft
-       */
-
-      // Callculate hard threshold
-      unsigned int hardThreshMax = thresMax + ((1023 - thresMax) * hardHitThresh);
-      unsigned int hardThreshMin = thresMin - (thresMin * hardHitThresh);
-      
-      if ((triggerValue > hardThreshMax) || (triggerValue < hardThreshMin)) {
-        
-        hit = 2;
-        
-      }
-      else {
-      
-        hit = 1;
-      
-      }
-
-      lastHitTime[triggerSource] = now;
-    }
-  
-    return hit;
-  
-  }
 }
 
 void programmcontroller(byte hitState[3]){
@@ -212,14 +339,5 @@ void programmcontroller(byte hitState[3]){
   }
 }
 
-/*
- * FX Section
- */
-
-void FX_1(){
-
-  pixST.setPixelColor(i, pixels.Color(0,0,255,0));
-  
-}
 
 
