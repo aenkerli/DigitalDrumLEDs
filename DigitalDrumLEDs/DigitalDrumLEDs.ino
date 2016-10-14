@@ -215,6 +215,7 @@ class Tom {
           }
     }
     else  {
+<<<<<<< HEAD
 
       switch (stepFX) {
         case 15:
@@ -269,6 +270,50 @@ class ProgControl {
 
   void runProgTom(Tom inTom) {
     
+=======
+
+      switch (stepFX) {
+        case 15:
+          if (currentMillis - previousMillis > waittime) {
+            pixels.setPixelColor(stepFX, pixels.Color(0,0,0,0));
+            pixels.show();
+            stepFX++; 
+          }
+        break;
+        case 30:
+          if (currentMillis - previousMillis > waittime) {
+            pixels.setPixelColor(stepFX, pixels.Color(0,0,0,0));
+            pixels.show();
+            stepFX++; 
+          }
+        break;
+        case 45:
+          if (currentMillis - previousMillis > waittime) {
+            pixels.setPixelColor(stepFX, pixels.Color(0,0,0,0));
+            pixels.show();
+            stepFX++; 
+          }
+        break;
+        case 60:
+          if (currentMillis - previousMillis > waittime) {
+            pixels.setPixelColor(stepFX, pixels.Color(0,0,0,0));
+            pixels.show();
+            stateFX = 1;
+            stepFX = 0; 
+          }
+        break;
+        default:
+          pixels.setPixelColor(stepFX, pixels.Color(0,0,0,0));
+          stepFX++; 
+          previousMillis = millis();
+        break;
+      }
+    }
+  }
+  void start(){
+    pixels.begin(); // This initializes the NeoPixel library.
+    pixels.show(); // Initialize all pixels to 'off'
+>>>>>>> refs/remotes/origin/master
   }
   
 };
