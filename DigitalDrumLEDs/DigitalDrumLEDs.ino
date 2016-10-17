@@ -1,8 +1,8 @@
 /*
  * Project: Digital Drum LEDs
  * Autor: Adrian Enkerli
- * Datum: 07.10.2016
- * Version: 0.2
+ * Datum: 17.10.2016
+ * Version: 0.3
  */
 
  /*
@@ -20,9 +20,9 @@
 
 // Global Variables
 // Set Analog Inputs
-byte triggerBD = 0;
+byte triggerBD = 2;
 byte triggerMT = 1;
-byte triggerST = 2;
+byte triggerST = 0;
 
 // Set Digital Output
 byte pinOutBD = 2;
@@ -46,7 +46,7 @@ float hardHitThresh = 0.5;
 // Threshold values BD=Bassdrum, MT=MidTom, SM=SmallTom
 
 //Threshold in %
-byte hitThresholdBD = 50;
+byte hitThresholdBD = 2;
 byte hitThresholdST = 50;
 byte hitThresholdMT = 50;
 
@@ -61,6 +61,9 @@ unsigned int thresholdSTmin = 350;
 /*
  * Do not make any changes after this point
  */
+
+// Initialization on startup
+bool initialize = 0;
 
 /*
  * States:
@@ -91,6 +94,10 @@ unsigned long lastHitTime[3] = {0,0,0};
  * 1 = running
  */
  byte runState[2] = {0,0};
+ bool runStateBD = 0;
+ bool runStateST = 0;
+ bool runStateMT = 0;
+
 
 
 /*
@@ -105,7 +112,11 @@ class Hit {
   byte hitThreshold;
   int maxThreshold;
   int minThreshold;
+  int hardThreshMax;
+  int hardThreshMin;
   int nullPoint;
+  int triggerValue;
+  byte i;
   
   public: 
   Hit(byte inTrigger, byte inSleepTime, byte inThreshold) {
@@ -116,11 +127,25 @@ class Hit {
   }
 
   void initialize() {
+    i=0;
+    while (i<5){
+      triggerValue += analogRead(inputTrigger);
+      //Serial.print(triggerValue);Serial.print(":::");
+      delay (100);
+      i++;
+    }
 
-  //Getnullpoint and callculate Threshold 
-    /* Schleife 5 mal je nach 100 ms Wert asulesen und dann alle mitteln
-    triggerValue = analogRead(inputTrigger);
-    */
+    nullPoint = triggerValue / 5;
+    Serial.print(nullPoint);Serial.print(":::");
+    maxThreshold = nullPoint + (1023 - nullPoint) / 100 * hitThreshold;
+    Serial.print(maxThreshold);Serial.print(":::");
+    minThreshold = nullPoint - (1023 - nullPoint) / 100 * hitThreshold;
+    Serial.println(minThreshold);
+
+    // Callculate hard threshold
+    hardThreshMax = maxThreshold + ((1023 - maxThreshold) * hardHitThresh);
+    hardThreshMin = minThreshold - (minThreshold * hardHitThresh);
+  
   }
 
   byte detectHit() {
@@ -134,7 +159,7 @@ class Hit {
      * 2 = hard
      * 
      */
-    unsigned int triggerValue = 512;
+
     byte hit = 0;
     unsigned long currentMillis = millis();
     
@@ -145,24 +170,22 @@ class Hit {
     */
       
       //Check sleeptime
-      if ( (lastHitTime == 0) || ((currentMillis - lastHitMillis) > sleepTime)) {
+      if ((currentMillis - lastHitMillis) >= sleepTime) {
         /*
          * Sleeptime not active, check hit
          */
     
         // Get analog input value
         triggerValue = analogRead(inputTrigger);
+        //Serial.print(inputTrigger); Serial.print(":::");
+        //Serial.println(triggerValue);
     
         // Check if a hit was hitten
         if ((triggerValue > maxThreshold) || (triggerValue < minThreshold)) {
           /*
            * hit, detected, check the it's a hard hit else it's soft
            */
-    
-          // Callculate hard threshold
-          unsigned int hardThreshMax = maxThreshold + ((1023 - maxThreshold) * hardHitThresh);
-          unsigned int hardThreshMin = minThreshold - (minThreshold * hardHitThresh);
-          
+           
           if ((triggerValue > hardThreshMax) || (triggerValue < hardThreshMin)) {
             
             hit = 2;
@@ -174,26 +197,13 @@ class Hit {
           
           }    
         }
-        lastHitMillis = millis();
+        lastHitMillis = currentMillis;
       }
       return hit;
   }
   
 };
 
-/*
- * Superclass Drum
- */
-class Drum {
-
-  public:
- 
-  Drum(){ }
-
-  void FX1(){ }
- 
-  void start(){ }
-};
 
 class SmallTom {
   
@@ -383,6 +393,7 @@ class BD {
   byte totalLEDRows;
   unsigned long previousMillisDB;
   Adafruit_NeoPixel pixelsDB;
+  bool stateFX;
   
   public:
   BD(Adafruit_NeoPixel pixels){
@@ -396,15 +407,19 @@ class BD {
     stepFXColum = 0;
     stepFXRow = 0;
     previousMillisDB = 0;
+    stateFX = 0;
 
   }
-
+  bool getFXState(){
+    return stateFX;
+  }
   void FX1(){
 
     
     unsigned long currentMillisDB = millis();
     unsigned int currentLED = 0;
     unsigned long waittimeBD = 30;
+    stateFX = 1;
   
   /*
    * Rows: Colums from - to
@@ -464,6 +479,7 @@ class BD {
         stepFXRow=0;
         pixelsDB.show();
         previousMillisDB = currentMillisDB;
+        stateFX = 0;
       }
     }
   }
@@ -502,19 +518,26 @@ void setup() {
 
  //Serial.begin(9600);          //  setup serial
 
-pixelBD.begin();
-pixelBD.show();
-pixelST.begin();
-pixelST.show();
-pixelMT.begin();
-pixelMT.show();
+  pixelBD.begin();
+  pixelBD.show();
+  pixelST.begin();
+  pixelST.show();
+  pixelMT.begin();
+  pixelMT.show();
 
 }
 
 void loop() {
   // Get current Time
   //unsigned long currentMillis = millis();
-  
+  if (initialize == 0){
+    //Serial.println("Start Initialize");
+    hitBD.initialize();
+    hitST.initialize();
+    hitMT.initialize();
+    initialize = 1;
+  }
+
 
   //Check BD
   /*
@@ -522,14 +545,31 @@ void loop() {
   hitStates[1] = hitdetection(triggerMT, thresholdMTmax, thresholdMTmin);
   hitStates[2] = hitdetection(triggerST, thresholdSTmax, thresholdSTmin);
   */
-  //programmcontroller(hitStates);
-  bassdrum.FX1();
+  //Serial.println(hitBD.detectHit());
+  programmcontroller(hitBD.detectHit());
+/*
+  if (hitBD != 0){
+    bassdrum.FX1();
+  }
+    if (hitST != 0){
+    bassdrum.FX1();
+  }
+    if (hitMT != 0){
+    bassdrum.FX1();
+  }
   smallTom.FX1();
   middleTom.FX1();
-  
+  */
 }
+void programmcontroller(byte inHit){
 
-void programmcontroller(byte hitState[3]){
+  bool isRunningBD = bassdrum.getFXState();
+  byte hitStateDB = inHit;
+  if ((isRunningBD == 1) || (hitStateDB > 0)){
+    bassdrum.FX1();
+  }
+}
+/*void programmcontroller(byte hitState[3]){
 
 // first select programm
 
@@ -562,6 +602,6 @@ void programmcontroller(byte hitState[3]){
     break;
   }
 }
-
+*/
 
 
