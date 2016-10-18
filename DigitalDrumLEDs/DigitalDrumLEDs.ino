@@ -1,8 +1,8 @@
 /*
  * Project: Digital Drum LEDs
  * Autor: Adrian Enkerli
- * Datum: 17.10.2016
- * Version: 0.3
+ * Datum: 18.10.2016
+ * Version: 0.4
  */
 
  /*
@@ -36,7 +36,7 @@ byte totalLEDsMT = 60;
 
 
 // SleepTime in ms - max 255
-byte sleepTime = 50;
+byte sleepTime = 80;
 
 // SoftHard Threshold 0 - 1
 float hardHitThresh = 0.5;
@@ -49,6 +49,15 @@ byte hitThresholdST = 5;
 byte hitThresholdMT = 5;
 
 /*
+ * Define Patterns using DrumType
+ * 
+ * DrumType: b=Bassdrum, s=SmallTom, m=MiddleTom
+ * 
+ */
+char pattern1[5] = "ssss";
+char pattern2[5] = "bsmm";
+
+/*
  * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  * 
  * Do not make any changes after this point
@@ -57,8 +66,11 @@ byte hitThresholdMT = 5;
  */
 
 // Initialization on startup
-bool initialize = 0;
-
+bool initialized = false;
+bool isRunning = false;
+bool isRunningBD = false;
+bool isRunningST = false;
+bool isRunningMT = false;
 /*
  * ProgrammModus
  * 
@@ -66,7 +78,7 @@ bool initialize = 0;
  * 1 = Scene
  * 2 = Pattern
  */
- byte selectedMode = 0;
+ byte selectedMode = 2;
  
 /*
  * FX
@@ -75,7 +87,7 @@ bool initialize = 0;
  * 1 = FX1
  * 2 = FX2
  */
- byte selectedFX = 1;
+ byte selectedFX = 0;
 
 /*
  * Scene
@@ -85,7 +97,10 @@ bool initialize = 0;
  * 
  */
  byte selectedScene = 0;
- 
+ int stepScene = 0;
+ bool stateScene = false;
+ bool sceneFirstTime = true;
+ unsigned long previousMillis = 0;
  /*
  * Pattern
  * 
@@ -94,13 +109,20 @@ bool initialize = 0;
  * 
  */
  byte selectedPattern = 0;
+ bool patternFirstRound = true;
+ char patternCue1[5];
+ char patternCue2[5];
+ char patternCue3[5];
+ char patternCue4[5];
+ bool patternMatch = false;
+ byte stepPattern = 0;
 
- uint32_t colorLED;
+ Adafruit_NeoPixel pixelBD = Adafruit_NeoPixel(totalLEDsBD, pinOutBD, NEO_RGBW + NEO_KHZ800);
+ Adafruit_NeoPixel pixelST = Adafruit_NeoPixel(totalLEDsST, pinOutST, NEO_RGBW + NEO_KHZ800);
+ Adafruit_NeoPixel pixelMT = Adafruit_NeoPixel(totalLEDsMT, pinOutMT, NEO_RGBW + NEO_KHZ800);
 
-Adafruit_NeoPixel pixelBD = Adafruit_NeoPixel(totalLEDsBD, pinOutBD, NEO_RGBW + NEO_KHZ800);
-Adafruit_NeoPixel pixelST = Adafruit_NeoPixel(totalLEDsST, pinOutST, NEO_RGBW + NEO_KHZ800);
-Adafruit_NeoPixel pixelMT = Adafruit_NeoPixel(totalLEDsMT, pinOutMT, NEO_RGBW + NEO_KHZ800);
-
+ uint32_t colorLED = pixelBD.Color(90,0,200,0);
+ uint32_t colorLEDBlack = pixelBD.Color(0,0,0,0);
 
 /*
  * Classes Section
@@ -211,14 +233,24 @@ class Hit {
 // Superclass Drum
 class Drum {
 
-  public:
- 
-  Drum(){ }
   
-  virtual void FX1() = 0;
-  virtual bool getFXState() = 0;
+
+  protected:
+  char typeDrum;
+  
+  public:
+  Drum(){ }
+
   virtual void Flash() = 0;
+  virtual void FX1() = 0;
   virtual void FX2() = 0;
+  virtual bool getFXState() = 0;
+  
+  byte getDrumType() {
+    return typeDrum;
+  }
+
+
  
   void start(){ }
 };
@@ -233,20 +265,53 @@ class Tom : public Drum {
   Adafruit_NeoPixel pixelsTom;
 
   public:
-  Tom(Adafruit_NeoPixel pixels){
+  Tom(Adafruit_NeoPixel pixels, char inTypeDrum){
     totalLEDs = totalLEDsST;
     pixelsTom = pixels;
     previousMillis = 0;
     stepFX = 0;
     stateFX = 0;
-    intStateFX = 1; 
+    intStateFX = 1;
+    typeDrum = inTypeDrum; 
   }
 
 /*
  * Effect with Steps
  */
   void Flash(){
+  
+    stateFX = 1;
+    unsigned long currentMillis = millis();
+    unsigned long waittime = 55;
     
+    if (intStateFX == 1) {
+      if (stepFX < totalLEDs){
+        pixelsTom.setPixelColor(stepFX, colorLED);
+        stepFX++;
+      }
+      else if (stepFX == totalLEDs) {   
+        pixelsTom.show();
+        stepFX++;
+        previousMillis = currentMillis;   
+      }
+      else if ((stepFX > totalLEDs) && (currentMillis - previousMillis >= waittime)){
+        stepFX = 0;
+        intStateFX = 0;
+      }
+    }
+    else if (intStateFX == 0) {
+
+      if (stepFX < totalLEDs){
+        pixelsTom.setPixelColor(stepFX, colorLEDBlack);
+        stepFX++;
+      }
+      else if (stepFX == totalLEDs) {   
+        pixelsTom.show();
+        stepFX = 0;
+        intStateFX = 1;
+        stateFX = 0;
+      }
+    }
   }
   void FX1(){
   
@@ -330,35 +395,69 @@ class BD : public Drum{
   byte totalLEDs;
   byte totalLEDColums;
   byte totalLEDRows;
-  unsigned long previousMillisDB;
+  unsigned long previousMillis;
   Adafruit_NeoPixel pixelsDB;
   bool stateFX;
+  bool intStateFX;
+  int stepFX;
   
   public:
-  BD(Adafruit_NeoPixel pixels){
+  BD(Adafruit_NeoPixel pixels, char inTypeDrum){
 
     totalLEDs = 72;
     totalLEDColums = 9;
     totalLEDRows = 8;
-    
     pixelsDB = pixels;   
-
     stepFXColum = 0;
     stepFXRow = 0;
-    previousMillisDB = 0;
+    previousMillis = 0;
     stateFX = 0;
+    intStateFX = 1;
+    stepFX = 0;
+    typeDrum = inTypeDrum;
 
   }
   bool getFXState(){
     return stateFX;
   }
   void Flash(){
+    stateFX = 1;
+    unsigned long currentMillis = millis();
+    unsigned long waittime = 55;
     
+    if (intStateFX == 1) {
+      if (stepFX < totalLEDs){
+        pixelsDB.setPixelColor(stepFX, colorLED);
+        stepFX++;
+      }
+      else if (stepFX == totalLEDs) {   
+        pixelsDB.show();
+        stepFX++;
+        previousMillis = currentMillis;   
+      }
+      else if ((stepFX > totalLEDs) && (currentMillis - previousMillis >= waittime)){
+        stepFX = 0;
+        intStateFX = 0;
+      }
+    }
+    else if (intStateFX == 0) {
+
+      if (stepFX < totalLEDs){
+        pixelsDB.setPixelColor(stepFX, colorLEDBlack);
+        stepFX++;
+      }
+      else if (stepFX == totalLEDs) {   
+        pixelsDB.show();
+        stepFX = 0;
+        intStateFX = 1;
+        stateFX = 0;
+      }
+    }
   }
   void FX1(){
 
     
-    unsigned long currentMillisDB = millis();
+    unsigned long currentMillis = millis();
     unsigned int currentLED = 0;
     unsigned long waittimeBD = 30;
     stateFX = 1;
@@ -374,7 +473,7 @@ class BD : public Drum{
    * 6: 54-62
    * 7: 63-71
    */
-    if ((stepFXColum < totalLEDColums) && (currentMillisDB - previousMillisDB > waittimeBD)){
+    if ((stepFXColum < totalLEDColums) && (currentMillis - previousMillis > waittimeBD)){
       
       if (stepFXRow < totalLEDRows){
   
@@ -402,7 +501,7 @@ class BD : public Drum{
        
         stepFXColum++;
         stepFXRow=0;
-        previousMillisDB = currentMillisDB;
+        previousMillis = currentMillis;
   
       }
   
@@ -420,7 +519,7 @@ class BD : public Drum{
         stepFXColum=0;
         stepFXRow=0;
         pixelsDB.show();
-        previousMillisDB = currentMillisDB;
+        previousMillis = currentMillis;
         stateFX = 0;
       }
     }
@@ -435,9 +534,10 @@ class BD : public Drum{
 };
 
 // Create the Toms
-Tom smallTomObj(pixelST);
-Tom middleTomObj(pixelMT);
-BD bassdrumObj(pixelBD);
+BD bassdrumObj(pixelBD,'b');
+Tom smallTomObj(pixelST,'s');
+Tom middleTomObj(pixelMT,'m');
+
 
 //Create Pointer
 Drum *bassdrum = &bassdrumObj;
@@ -452,7 +552,7 @@ Hit hitMT(triggerMT,sleepTime,hitThresholdMT);
 
 void setup() {
 
- //Serial.begin(9600);          //  setup serial
+ Serial.begin(9600);          //  setup serial
 
   pixelBD.begin();
   pixelBD.show();
@@ -466,12 +566,12 @@ void setup() {
 void loop() {
   // Get current Time
   //unsigned long currentMillis = millis();
-  if (initialize == 0){
+  if (initialized == false){
     //Serial.println("Start Initialize");
     hitBD.initialize();
     hitST.initialize();
     hitMT.initialize();
-    initialize = 1;
+    initialized = true;
   }
 
   //Serial.println(hitBD.detectHit());
@@ -482,12 +582,13 @@ void loop() {
 }
 void programmcontroller(byte inHit, Drum *inDrum){
 
-  bool isRunning = inDrum->getFXState();
+  
   byte hitState = inHit;
+  
 
   switch (selectedMode) {
     case 0: // Blink
-    
+      isRunning = inDrum->getFXState();
       if ((isRunning == 1) || (hitState > 0)){
 
         switch (selectedFX) {
@@ -504,19 +605,326 @@ void programmcontroller(byte inHit, Drum *inDrum){
           break;
         }
       }
-
+    break;
 
     
-
-    break;
     case 1: // Scene
+      //Start Scene
+      if (( stateScene != 1) && (hitState > 0)) {
+        stateScene = 1;
+        sceneFirstTime = true;
+      }
+
+      if ( stateScene == 1) {
+        switch (selectedScene) {  
+          case 0: // Scene1
+            scene1();    
+          break;
+          case 1: // Scene2
+            scene1();
+          break;
+          default:
+          break;
+        }  
+      }
+   
     break;
+    
+    
     case 2: // Pattern
+      isRunning = inDrum->getFXState();
+      char currentDrumType;
+      currentDrumType = inDrum->getDrumType();
+      
+      if (hitState > 0){
+        switch (selectedPattern) {
+          case 0: // Pattern 1
+            patternMatch = pattern(currentDrumType, pattern1);
+          break;
+          case 1: // Pattern 2
+            patternMatch = pattern(currentDrumType, pattern2);
+          break;
+          default:
+          break;
+        }
+      }
+ 
+      if ((patternMatch == true) || ( stateScene == 1)) {
+        stateScene = 1;
+        patternMatch = false;
+        scene1();
+      }
+    
     break;
     default:
     break; 
   }
 }
 
+void scene1() {
+
+  isRunningBD = bassdrum->getFXState();
+  isRunningST = smallTom->getFXState();
+  isRunningMT = middleTom->getFXState();
+  unsigned long currentMillis = millis();
+ 
+  switch (stepScene) {
+    case 0:
+      if ((isRunningBD == true) || (isRunningST == true) || (isRunningMT == true) || (sceneFirstTime == true)) {
+  
+        if ((isRunningBD == true) || (sceneFirstTime == true)) {
+          bassdrum->FX1();
+        }
+  
+        if ((isRunningST == true) || (sceneFirstTime == true)) {
+          smallTom->FX1();
+        }
+        if ((isRunningMT == true) || (sceneFirstTime == true)) {
+          middleTom->FX1();
+        }
+        sceneFirstTime = false;
+      }
+      else {
+        stepScene++;
+        sceneFirstTime = true;
+        previousMillis = currentMillis;
+      }
+    break;
+
+    //Pause
+    case 1:
+      if ( currentMillis - previousMillis >= 1000 ) {
+        stepScene++;
+      }
+    break;
+    case 2:
+      if ((isRunningBD == true) || (isRunningST == true) || (isRunningMT == true) || (sceneFirstTime == true)) {
+
+        if ((isRunningBD == true) || (sceneFirstTime == true)) {
+          bassdrum->Flash();
+        }
+
+        if ((isRunningST == true) || (sceneFirstTime == true)) {
+          smallTom->Flash();
+        }
+        if ((isRunningMT == true) || (sceneFirstTime == true)) {
+          middleTom->Flash();
+        }
+        sceneFirstTime = false;
+      }
+      else {
+        stepScene++;
+        sceneFirstTime = true;
+        previousMillis = currentMillis;
+      }
+    break;
+
+    //Pause
+    case 3:
+      if ( currentMillis - previousMillis >= 1000 ) {
+        stepScene++;
+      }
+    break;
+        
+    case 4:
+      if ((isRunningBD == true) || (isRunningST == true) || (isRunningMT == true) || (sceneFirstTime == true)) {
+
+        if ((isRunningBD == true) || (sceneFirstTime == true)) {
+          bassdrum->FX1();
+        }
+
+        if ((isRunningST == true) || (sceneFirstTime == true)) {
+          smallTom->FX1();
+        }
+        if ((isRunningMT == true) || (sceneFirstTime == true)) {
+          middleTom->FX1();
+        }
+        sceneFirstTime = false;
+      }
+      else {
+        stepScene++;
+        sceneFirstTime = true;
+      }
+    break;
+    
+    default:
+      stepScene = 0;
+      sceneFirstTime = true;
+      stateScene = 0;
+    break;
+    }
+
+}
+void scene2() {
+
+  isRunningBD = bassdrum->getFXState();
+  isRunningST = smallTom->getFXState();
+  isRunningMT = middleTom->getFXState();
+  unsigned long currentMillis = millis();
+ 
+  switch (stepScene) {
+     case 0:
+      if ((isRunningBD == true) || (isRunningST == true) || (isRunningMT == true) || (sceneFirstTime == true)) {
+
+        if ((isRunningBD == true) || (sceneFirstTime == true)) {
+          bassdrum->Flash();
+        }
+
+        if ((isRunningST == true) || (sceneFirstTime == true)) {
+          smallTom->Flash();
+        }
+        if ((isRunningMT == true) || (sceneFirstTime == true)) {
+          middleTom->Flash();
+        }
+        sceneFirstTime = false;
+      }
+      else {
+        stepScene++;
+        sceneFirstTime = true;
+        previousMillis = currentMillis;
+      }
+    break;
+    
+    //Pause
+    case 1:
+      if ( currentMillis - previousMillis >= 500 ) {
+        stepScene++;
+      }
+    break;
+    
+    case 2:
+      if ((isRunningBD == true) || (isRunningST == true) || (isRunningMT == true) || (sceneFirstTime == true)) {
+
+        if ((isRunningBD == true) || (sceneFirstTime == true)) {
+          bassdrum->Flash();
+        }
+
+        if ((isRunningST == true) || (sceneFirstTime == true)) {
+          smallTom->Flash();
+        }
+        if ((isRunningMT == true) || (sceneFirstTime == true)) {
+          middleTom->Flash();
+        }
+        sceneFirstTime = false;
+      }
+      else {
+        stepScene++;
+        sceneFirstTime = true;
+        previousMillis = currentMillis;
+      }
+    break;
+    
+    //Pause
+    case 3:
+      if ( currentMillis - previousMillis >= 1000 ) {
+        stepScene++;
+      }
+    break;
+    
+    case 4:
+      if ((isRunningBD == true) || (isRunningST == true) || (isRunningMT == true) || (sceneFirstTime == true)) {
+  
+        if ((isRunningBD == true) || (sceneFirstTime == true)) {
+          bassdrum->FX1();
+        }
+  
+        if ((isRunningST == true) || (sceneFirstTime == true)) {
+          smallTom->FX1();
+        }
+        if ((isRunningMT == true) || (sceneFirstTime == true)) {
+          middleTom->FX1();
+        }
+        sceneFirstTime = false;
+      }
+      else {
+        stepScene++;
+        sceneFirstTime = true;
+      }
+    break;
+   
+    default:
+      stepScene = 0;
+      sceneFirstTime = true;
+      stateScene = 0;
+    break;
+    }
+}
+
+bool pattern(char inDrumType, char *inPattern) {
+  switch (stepPattern) {
+    case 0:
+      if (patternFirstRound == true) {
+        patternCue1[0] = inDrumType;   
+      }
+      else {
+        patternCue1[0] = inDrumType; 
+        patternCue2[3] = inDrumType;
+        patternMatch = checkPattern(patternCue2, inPattern);
+        patternCue3[2] = inDrumType; 
+        patternCue4[1] = inDrumType;
+      }
+      stepPattern++;
+    break;
+    case 1:
+      if (patternFirstRound == true) {
+        patternCue1[1] = inDrumType; 
+        patternCue2[0] = inDrumType;
+      }
+      else {
+        patternCue1[1] = inDrumType; 
+        patternCue2[0] = inDrumType; 
+        patternCue3[3] = inDrumType;
+        patternMatch = checkPattern(patternCue3, inPattern); 
+        patternCue4[2] = inDrumType;
+      }
+      stepPattern++;
+    break;
+    case 2:
+      if (patternFirstRound == true) {
+        patternCue1[2] = inDrumType; 
+        patternCue2[1] = inDrumType; 
+        patternCue3[0] = inDrumType;
+        patternFirstRound = false;
+      }
+      else {
+        patternCue1[2] = inDrumType; 
+        patternCue2[1] = inDrumType; 
+        patternCue3[0] = inDrumType; 
+        patternCue4[3] = inDrumType;
+        patternMatch = checkPattern(patternCue4, inPattern);
+      }
+      stepPattern++; 
+    break;
+    case 3:
+      patternCue1[3] = inDrumType;
+      patternMatch = checkPattern(patternCue1, inPattern); 
+      patternCue2[2] = inDrumType; 
+      patternCue3[1] = inDrumType; 
+      patternCue4[0] = inDrumType; 
+      stepPattern = 0;
+      
+    break;
+    default:
+    break;
+  }
+  Serial.print("patternFirstRound:::");Serial.print(patternFirstRound);
+  Serial.print("PatternMatch:::");Serial.print(patternMatch);
+  return patternMatch;
+}
+
+bool checkPattern(char *inPatternCue, char *inPattern){
+  patternMatch = false;
+  byte n;
+  n = memcmp ( inPatternCue, inPattern, 4 );
+  if (n == 0){
+    patternMatch = true;
+  }
+  Serial.print("inPatternCue:::");Serial.print(inPatternCue);Serial.print(":::END::inPatternCue:::");
+  Serial.print("inPattern:::");Serial.print(inPattern);Serial.print(":::END::inPattern:::");
+  
+  Serial.print(n);
+  memset(inPatternCue,0,5);
+  return patternMatch;
+}
 
 
