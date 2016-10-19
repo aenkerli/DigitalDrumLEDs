@@ -1,8 +1,8 @@
 /*
  * Project: Digital Drum LEDs
  * Autor: Adrian Enkerli
- * Datum: 18.10.2016
- * Version: 0.4
+ * Datum: 19.10.2016
+ * Version: 0.5
  */
 
  /*
@@ -78,7 +78,7 @@ bool isRunningMT = false;
  * 1 = Scene
  * 2 = Pattern
  */
- byte selectedMode = 2;
+ byte selectedMode = 0;
  
 /*
  * FX
@@ -124,6 +124,25 @@ bool isRunningMT = false;
  uint32_t colorLED = pixelBD.Color(90,0,200,0);
  uint32_t colorLEDBlack = pixelBD.Color(0,0,0,0);
 
+/*
+ * Console Buttons and LED Pins
+ */
+
+ byte pinBtnConfig = 22;
+ byte pinLEDConfig = 23;
+ byte pinBtnMode = 24;
+ byte pinLEDModeBlink = 25;
+ byte pinLEDModeScene = 26;
+ byte pinLEDModePattern = 27;
+
+/*
+ * Configuration
+ */
+ bool lastBtnConfigState;
+ bool btnConfigState;
+ bool lastBtnModeState;
+ bool btnModeState;
+ bool configMode = false;
 /*
  * Classes Section
  */
@@ -554,6 +573,18 @@ void setup() {
 
  Serial.begin(9600);          //  setup serial
 
+ /*
+  * PinMode
+  */
+  
+  pinMode(pinBtnConfig, INPUT);
+  pinMode(pinLEDConfig, OUTPUT);
+  pinMode(pinBtnMode, INPUT);
+  pinMode(pinLEDModeBlink, OUTPUT);
+  pinMode(pinLEDModeScene, OUTPUT);
+  pinMode(pinLEDModePattern, OUTPUT);
+
+   
   pixelBD.begin();
   pixelBD.show();
   pixelST.begin();
@@ -564,8 +595,9 @@ void setup() {
 }
 
 void loop() {
-  // Get current Time
-  //unsigned long currentMillis = millis();
+
+ 
+
   if (initialized == false){
     //Serial.println("Start Initialize");
     hitBD.initialize();
@@ -574,11 +606,76 @@ void loop() {
     initialized = true;
   }
 
-  //Serial.println(hitBD.detectHit());
-  programmcontroller(hitBD.detectHit(), bassdrum);
-  programmcontroller(hitST.detectHit(), smallTom);
-  programmcontroller(hitMT.detectHit(), middleTom);
+  /*
+   * Check Config Mode button
+   */
+  btnConfigState = digitalRead(pinBtnConfig);
 
+  if (btnConfigState != lastBtnConfigState){
+    if (btnConfigState == LOW){
+      if (configMode == true) {
+        // trun off config Mode
+        configMode = false;
+        digitalWrite(pinLEDConfig, LOW);
+      }
+      else {
+        // trun on config Mode
+        configMode = true;
+        digitalWrite(pinLEDConfig, HIGH);
+      }     
+    }
+    delay(50);
+  }
+  lastBtnConfigState = btnConfigState;
+
+  /*
+   * Get into configuration()
+   */
+  if (configMode == true) {
+    configuration();
+  }
+  else {
+    //Serial.println(hitBD.detectHit());
+    programmcontroller(hitBD.detectHit(), bassdrum);
+    programmcontroller(hitST.detectHit(), smallTom);
+    programmcontroller(hitMT.detectHit(), middleTom);
+  }
+}
+
+void configuration() {
+  unsigned long currentMillis = millis();
+  
+  btnModeState = digitalRead(pinBtnMode);
+
+  if (btnModeState != lastBtnModeState){
+    if (btnModeState == LOW){
+      switch (selectedMode) {
+        case 0:
+          selectedMode = 1;
+          digitalWrite(pinLEDModeBlink, LOW);
+          digitalWrite(pinLEDModeScene, HIGH);
+        break;
+        case 1:
+          selectedMode = 2;
+          digitalWrite(pinLEDModeScene, LOW);
+          digitalWrite(pinLEDModePattern, HIGH);
+        break;
+        case 2:
+          selectedMode = 0;
+          digitalWrite(pinLEDModePattern, LOW);
+          digitalWrite(pinLEDModeBlink, HIGH);
+        break;
+        default:
+        break;
+      }
+    }
+    delay(50);
+  }
+  // Enter Testmode if button is active more then 3sek
+  else if ((btnModeState == LOW) && (currentMillis - previousMillis > 3000)) {
+    testMode();
+  }
+  lastBtnModeState = btnModeState;
 }
 void programmcontroller(byte inHit, Drum *inDrum){
 
@@ -849,7 +946,12 @@ void scene2() {
     break;
     }
 }
-
+void testMode() {
+  // TestMode
+}
+void sendMidi(){
+  
+}
 bool pattern(char inDrumType, char *inPattern) {
   switch (stepPattern) {
     case 0:
