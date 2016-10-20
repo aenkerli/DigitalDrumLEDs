@@ -161,7 +161,7 @@ class Hit {
   int hardThreshMin;
   int nullPoint;
   int triggerValue;
-  byte i;
+  byte cntInit;
   
   public: 
   Hit(byte inTrigger, byte inSleepTime, byte inThreshold) {
@@ -172,12 +172,12 @@ class Hit {
   }
 
   void initialize() {
-    i=0;
-    while (i<5){
+    cntInit=0;
+    while (cntInit<5){
       triggerValue += analogRead(inputTrigger);
       //Serial.print(triggerValue);Serial.print(":::");
       delay (100);
-      i++;
+      cntInit++;
     }
 
     nullPoint = triggerValue / 5;
