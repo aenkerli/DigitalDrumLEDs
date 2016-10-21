@@ -65,6 +65,15 @@ byte hitThresholdMT = 5;
 char pattern1[5] = "ssss";
 char pattern2[5] = "bsmm";
 
+byte midiChannelOn = "Ax90";
+byte midiChannelOff = "Ax80";
+byte midiNoteBD = "0x36";
+byte midiNoteST = "0x50";
+byte midiNoteMT = "0x47";
+byte midiVelocityOff = "0x00";
+byte midiVelocitySoft = "0x20";
+byte midiVelocityHard = "0x46";
+
 /*
  * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  * 
@@ -136,8 +145,8 @@ bool isRunningMT = false;
  * Console Buttons and LED Pins
  */
 
- byte pinBtnConfig = 22;
- byte pinLEDConfig = 23;
+ byte pinBtnConfig = 34;
+ byte pinLEDConfig = 22;
  byte pinBtnMode = 24;
  byte pinLEDModeBlink = 25;
  byte pinLEDModeScene = 26;
@@ -151,6 +160,13 @@ bool isRunningMT = false;
  bool lastBtnModeState;
  bool btnModeState;
  bool configMode = false;
+
+/*
+ * Ext. Interfaces
+ */
+ byte lastMidiState = 0;
+
+
 /*
  * Classes Section
  */
@@ -270,6 +286,8 @@ class Drum {
   byte totalLEDColums;
   byte totalLEDRows;
   Adafruit_NeoPixel pixels;
+  byte midiNote;
+  byte lastMidiState;
   
   public:
   Drum(){ }
@@ -324,12 +342,43 @@ class Drum {
       }
     }
   }
+  void sendMidi(byte inHit){
+  byte midiState = inHit;
+  
+  // mIdi chanel 10 
+  // Note 50 High Tom 1
+  // Note 36 Bass Drum 1
+  // Note 47 Mid Tom 1
+  
+  if (midiState != lastMidiState) {
+    switch (midiState) {
+      case 0: // no Hit - tunr Midi note off
+        Serial.write(midiChannelOff);
+        Serial.write(midiNote);
+        Serial.write(midiVelocityOff);
+      break;
+      case 1: // soft hit - turn Midi note on
+        Serial.write(midiChannelOn);
+        Serial.write(midiNote);
+        Serial.write(midiVelocitySoft); //mf
+      break;
+      case 2: // hard Hit - tunr Midi note on
+        Serial.write(midiChannelOn);
+        Serial.write(midiNote);
+        Serial.write(midiVelocityHard); //fff
+      break;
+    }
+    lastMidiState = midiState;
+  }
+}
+
+
 };
 
 class Tom : public Drum {
 
   public:
-  Tom(Adafruit_NeoPixel inPixels, char inTypeDrum, byte inTotalLEDs, byte inTotalLEDColums, byte inTotalLEDRows){
+  Tom(Adafruit_NeoPixel inPixels, char inTypeDrum, byte inTotalLEDs, byte inTotalLEDColums, byte inTotalLEDRows,  byte inMidiNote){
     pixels = inPixels;
     totalLEDs = inTotalLEDs;
     totalLEDColums = inTotalLEDColums;
@@ -339,7 +388,8 @@ class Tom : public Drum {
     stepFX = 0;
     stateFX = 0;
     intStateFX = 1;
-    typeDrum = inTypeDrum; 
+    typeDrum = inTypeDrum;
+    midiNote = inMidiNote;
   }
 
 /*
@@ -420,7 +470,7 @@ class BD : public Drum{
   unsigned int stepFXRow;
   
   public:
-  BD(Adafruit_NeoPixel inPixels, char inTypeDrum, byte inTotalLEDs, byte inTotalLEDColums, byte inTotalLEDRows){
+  BD(Adafruit_NeoPixel inPixels, char inTypeDrum, byte inTotalLEDs, byte inTotalLEDColums, byte inTotalLEDRows, byte inMidiNote){
 
     pixels = inPixels;
     totalLEDs = inTotalLEDs;
@@ -434,6 +484,7 @@ class BD : public Drum{
     intStateFX = 1;
     stepFX = 0;
     typeDrum = inTypeDrum;
+    midiNote = inMidiNote;
 
   }
 
@@ -514,9 +565,9 @@ class BD : public Drum{
 };
 
 // Create the Toms
-BD bassdrumObj(pixelBD,'b',totalLEDsBD,totalLEDColumsBD,totalLEDRowsBD);
-Tom smallTomObj(pixelST,'s',totalLEDsST,totalLEDColumsST,totalLEDRowsST);
-Tom middleTomObj(pixelMT,'m',totalLEDsMT,totalLEDColumsMT,totalLEDRowsMT);
+BD bassdrumObj(pixelBD,'b',totalLEDsBD,totalLEDColumsBD,totalLEDRowsBD,midiNoteBD);
+Tom smallTomObj(pixelST,'s',totalLEDsST,totalLEDColumsST,totalLEDRowsST,midiNoteST);
+Tom middleTomObj(pixelMT,'m',totalLEDsMT,totalLEDColumsMT,totalLEDRowsMT,midiNoteMT);
 
 
 //Create Pointer
@@ -533,6 +584,11 @@ Hit hitMT(triggerMT,sleepTime,hitThresholdMT);
 void setup() {
 
  //Serial.begin(9600);          //  setup serial
+
+ /*
+  * Setup Serial for Midi
+  */
+ Serial2.begin(31250);
 
  /*
   * PinMode
@@ -591,12 +647,15 @@ void loop() {
     configuration();
   }
   else {
-    //Serial.println(hitBD.detectHit());
-    //Serial.print("is Running");
-    programmcontroller(hitBD.detectHit(), bassdrum);
-    //programmcontroller(1, bassdrum);
-    programmcontroller(hitST.detectHit(), smallTom);
-    programmcontroller(hitMT.detectHit(), middleTom);
+    byte hitDBnow = hitBD.detectHit();
+    byte hitSTnow = hitST.detectHit();
+    byte hitMTnow = hitMT.detectHit();
+    programmcontroller(hitDBnow, bassdrum);
+    bassdrum->sendMidi(hitDBnow);
+    programmcontroller(hitSTnow, smallTom);
+    smallTom->sendMidi(hitDBnow);
+    programmcontroller(hitMTnow, middleTom);
+    middleTom->sendMidi(hitDBnow);
   }
 }
 
@@ -907,9 +966,7 @@ void scene2() {
 void testMode() {
   // TestMode
 }
-void sendMidi(){
-  
-}
+
 bool pattern(char inDrumType, char *inPattern) {
   switch (stepPattern) {
     case 0:
