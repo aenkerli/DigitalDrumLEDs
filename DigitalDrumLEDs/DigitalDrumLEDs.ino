@@ -1,8 +1,8 @@
 /*
  * Project: Digital Drum LEDs
  * Autor: Adrian Enkerli
- * Datum: 20.10.2016
- * Version: 0.7
+ * Datum: 23.10.2016
+ * Version: 1.0
  */
 
  /*
@@ -95,7 +95,7 @@ bool isRunningMT = false;
  * 1 = Scene
  * 2 = Pattern
  */
- byte selectedMode = 1;
+ byte selectedMode = 0;
  
 /*
  * FX
@@ -170,10 +170,9 @@ bool isRunningMT = false;
 /*
  * Classes Section
  */
-
-
-
-//Class Hit
+/*
+ * Class Hit
+ */
 class Hit {
   byte inputTrigger;
   unsigned long hitSleepTime;
@@ -186,8 +185,15 @@ class Hit {
   int nullPoint;
   int triggerValue;
   byte cntInit;
-  
+
   public: 
+  /*
+   * Ceates new Hit
+   * input:
+   * byte inTrigger -> input Pin
+   * byte inSleepTime -> Sleeptime
+   * byte inThreshold -> Correspoding threshold
+   */
   Hit(byte inTrigger, byte inSleepTime, byte inThreshold) {
     inputTrigger = inTrigger;
     hitSleepTime = inSleepTime;
@@ -195,21 +201,23 @@ class Hit {
     lastHitMillis = 0;
   }
 
+/*
+ * Initializing the input
+ */
   void initialize() {
     cntInit=0;
     while (cntInit<5){
       triggerValue += analogRead(inputTrigger);
-      //Serial.print(triggerValue);Serial.print(":::");
       delay (100);
       cntInit++;
     }
 
     nullPoint = triggerValue / 5;
-    Serial.print(nullPoint);Serial.print(":::");
+    
     maxThreshold = nullPoint + (1023 - nullPoint) / 100 * hitThreshold;
-    Serial.print(maxThreshold);Serial.print(":::");
+    
     minThreshold = nullPoint - (1023 - nullPoint) / 100 * hitThreshold;
-    Serial.println(minThreshold);
+    
 
     // Callculate hard threshold
     hardThreshMax = maxThreshold + ((1023 - maxThreshold) * hardHitThresh);
@@ -217,6 +225,9 @@ class Hit {
   
   }
 
+/*
+ * Detect hit
+ */
   byte detectHit() {
     
     /*
@@ -375,9 +386,24 @@ class Drum {
 
 };
 
+/*
+ * Class Tom
+ */
 class Tom : public Drum {
 
+
   public:
+  /*
+   * Class Tom
+   * 
+   * @input:
+   * Adafruit_NeoPixel inPixels
+   * char inTypeDrum -> type of drum
+   * byte inTotalLEDs -> total LEDs
+   * byte inTotalLEDColums -> total LED colums
+   * byte inTotalLEDRows -> total LED rows
+   * byte inMidiNote -> midi Note
+   */
   Tom(Adafruit_NeoPixel inPixels, char inTypeDrum, byte inTotalLEDs, byte inTotalLEDColums, byte inTotalLEDRows,  byte inMidiNote){
     pixels = inPixels;
     totalLEDs = inTotalLEDs;
@@ -459,17 +485,93 @@ class Tom : public Drum {
       }
     }
   }
-  void FX2(){
-    
-  }
 
+  /*
+   * Effect 2
+   */
+  void FX2(){
+    stateFX = 1;
+  unsigned long currentMillis = millis();
+  unsigned long waittime = 55;
+  
+    if ((intStateFX == 1) && (currentMillis - previousMillis >= waittime)) {
+          if (stepFX < totalLEDs){
+            pixels.setPixelColor(stepFX, pixels.Color(0,255,0,0));
+            stepFX++;
+          }
+          else if (stepFX == totalLEDs) {   
+            pixels.show();
+            stepFX++;
+            previousMillis = currentMillis;   
+          }
+          else if ((stepFX > totalLEDs) && (currentMillis - previousMillis >= waittime)){
+            stepFX = 0;
+            intStateFX = 0;
+          }
+    }
+    else if (intStateFX == 0) {
+
+      switch (stepFX) {
+        case 15:
+          if (currentMillis - previousMillis >= waittime) {
+            pixels.show();
+            pixels.setPixelColor(stepFX, colorLEDBlack);
+            stepFX++; 
+          }
+        break;
+        case 30:
+          if (currentMillis - previousMillis >= waittime) {
+            pixels.show();
+            pixels.setPixelColor(stepFX, colorLEDBlack);
+            stepFX++; 
+          }
+        break;
+        case 45:
+          if (currentMillis - previousMillis >= waittime) {
+            pixels.show();
+            pixels.setPixelColor(stepFX, colorLEDBlack);
+            stepFX++; 
+          }
+        break;
+        case 60:
+            if (currentMillis - previousMillis >= waittime) {
+            pixels.show();
+            pixels.setPixelColor(stepFX, colorLEDBlack);
+            intStateFX = 1;
+            stepFX = 0;  
+            previousMillis = currentMillis;
+            stateFX = 0;
+          }
+
+        break;
+        default:
+          pixels.setPixelColor(stepFX, colorLEDBlack);
+          stepFX++; 
+          previousMillis = currentMillis;
+        break;
+      }
+    }
+  }
 };
 
 class BD : public Drum{
+
+  private:
   unsigned int stepFXColum;
   unsigned int stepFXRow;
   
   public:
+   /*
+   * Class BD
+   * 
+   * @input:
+   * Adafruit_NeoPixel inPixels
+   * char inTypeDrum -> type of drum
+   * byte inTotalLEDs -> total LEDs
+   * byte inTotalLEDColums -> total LED colums
+   * byte inTotalLEDRows -> total LED rows
+   * byte inMidiNote -> midi Note
+   */
   BD(Adafruit_NeoPixel inPixels, char inTypeDrum, byte inTotalLEDs, byte inTotalLEDColums, byte inTotalLEDRows, byte inMidiNote){
 
     pixels = inPixels;
@@ -561,10 +663,76 @@ class BD : public Drum{
   }
   void FX2(){
     
+    unsigned long currentMillis = millis();
+    unsigned int currentLED = 0;
+    unsigned long waittimeBD = 30;
+    stateFX = 1;
+  
+  /*
+   * Rows: Colums from - to
+   * 0: 0-8
+   * 1: 9-17
+   * 2: 18-26
+   * 3: 27-35
+   * 4: 36-44
+   * 5: 45-53
+   * 6: 54-62
+   * 7: 63-71
+   */
+    if ((stepFXColum < totalLEDColums) && (currentMillis - previousMillis > waittimeBD)){
+      
+      if (stepFXRow < totalLEDRows){
+  
+        switch (stepFXColum){
+          case 0:
+            currentLED = (stepFXRow * totalLEDColums) + stepFXColum;
+            pixels.setPixelColor(currentLED, pixels.Color(255,0,0,0));
+          break;
+  
+          default:
+            currentLED = (stepFXRow * totalLEDColums) + stepFXColum;
+            pixels.setPixelColor(currentLED, pixels.Color(255,0,0,0));
+  
+            currentLED = (stepFXRow * totalLEDColums) + (stepFXColum - 1);
+            pixels.setPixelColor(currentLED, colorLEDBlack);
+  
+          break;
+        }
+  
+        pixels.show();
+        stepFXRow++;
+        
+      }
+      else {
+       
+        stepFXColum++;
+        stepFXRow=0;
+        previousMillis = currentMillis;
+  
+      }
+  
+    } else if (stepFXColum == totalLEDColums) {
+  
+            //Deactivate the previous row
+      if (stepFXRow < totalLEDRows){
+  
+            currentLED = (stepFXRow * totalLEDColums) + (stepFXColum - 1);
+            pixels.setPixelColor(currentLED, colorLEDBlack);
+            stepFXRow++;
+      }
+      else
+      {
+        stepFXColum=0;
+        stepFXRow=0;
+        pixels.show();
+        previousMillis = currentMillis;
+        stateFX = 0;
+      }
+    }
   }
 };
 
-// Create the Toms
+// Create the Toms and the BD
 BD bassdrumObj(pixelBD,'b',totalLEDsBD,totalLEDColumsBD,totalLEDRowsBD,midiNoteBD);
 Tom smallTomObj(pixelST,'s',totalLEDsST,totalLEDColumsST,totalLEDRowsST,midiNoteST);
 Tom middleTomObj(pixelMT,'m',totalLEDsMT,totalLEDColumsMT,totalLEDRowsMT,midiNoteMT);
@@ -610,6 +778,7 @@ void setup() {
 
 void loop() {
 
+// Initialize the inputs
   if (initialized == false){
     //Serial.println("Start Initialize");
     hitBD.initialize();
@@ -653,12 +822,16 @@ void loop() {
     programmcontroller(hitDBnow, bassdrum);
     bassdrum->sendMidi(hitDBnow);
     programmcontroller(hitSTnow, smallTom);
-    smallTom->sendMidi(hitDBnow);
+    smallTom->sendMidi(hitSTnow);
     programmcontroller(hitMTnow, middleTom);
-    middleTom->sendMidi(hitDBnow);
+    middleTom->sendMidi(hitMTnow);
   }
 }
 
+/*
+ * Configuration
+ * Responsible for the user configuration.
+ */
 void configuration() {
   unsigned long currentMillis = millis();
   
@@ -694,12 +867,18 @@ void configuration() {
   }
   lastBtnModeState = btnModeState;
 }
-void programmcontroller(byte inHit, Drum *inDrum){
 
+/*
+ * Programmcontroller
+ * Controls the Programm
+ * intput:
+ * byte inHit -> hit
+ * Drum inDrum -> corresponding Drum
+ */
+void programmcontroller(byte inHit, Drum *inDrum){
   
   byte hitState = inHit;
   
-
   switch (selectedMode) {
     case 0: // Blink
       isRunning = inDrum->getFXState();
@@ -774,7 +953,9 @@ void programmcontroller(byte inHit, Drum *inDrum){
     break; 
   }
 }
-
+/*
+ * Scene 1
+ */
 void scene1() {
 
   isRunningBD = bassdrum->getFXState();
@@ -869,6 +1050,9 @@ void scene1() {
     }
 
 }
+/*
+ * Scene 2
+ */
 void scene2() {
 
   isRunningBD = bassdrum->getFXState();
@@ -967,6 +1151,12 @@ void testMode() {
   // TestMode
 }
 
+/*
+ * Pattern Mode
+ * input:
+ * char inDrumType -> the type of the drum
+ * char inPattern -> the pattern to check
+ */
 bool pattern(char inDrumType, char *inPattern) {
   switch (stepPattern) {
     case 0:
@@ -1029,6 +1219,12 @@ bool pattern(char inDrumType, char *inPattern) {
   return patternMatch;
 }
 
+/*
+ * Checks the pattern for the pattern mode
+ * input:
+ * char inPatternCue -> the cue with the hits
+ * char inPattern -> the pattern to compare with
+ */
 bool checkPattern(char *inPatternCue, char *inPattern){
   patternMatch = false;
   byte n;
