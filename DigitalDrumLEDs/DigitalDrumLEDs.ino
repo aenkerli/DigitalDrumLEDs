@@ -19,6 +19,7 @@
  */
 
 // Global Variables
+bool debug = false;
 // Set Analog Inputs
 byte triggerBD = 2;
 byte triggerMT = 1;
@@ -44,7 +45,7 @@ byte totalLEDRowsMT = 4;
 
 
 // SleepTime in ms - max 255
-byte sleepTime = 80;
+byte sleepTime = 100;
 
 // SoftHard Threshold 0 - 1
 float hardHitThresh = 0.5;
@@ -52,7 +53,7 @@ float hardHitThresh = 0.5;
 // Threshold values BD=Bassdrum, MT=MidTom, SM=SmallTom
 
 //Threshold in %
-byte hitThresholdBD = 2;
+byte hitThresholdBD = 5;
 byte hitThresholdST = 5;
 byte hitThresholdMT = 5;
 
@@ -64,15 +65,6 @@ byte hitThresholdMT = 5;
  */
 char pattern1[5] = "ssss";
 char pattern2[5] = "bsmm";
-
-byte midiChannelOn = "Ax90";
-byte midiChannelOff = "Ax80";
-byte midiNoteBD = "0x36";
-byte midiNoteST = "0x50";
-byte midiNoteMT = "0x47";
-byte midiVelocityOff = "0x00";
-byte midiVelocitySoft = "0x20";
-byte midiVelocityHard = "0x46";
 
 /*
  * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -104,7 +96,7 @@ bool isRunningMT = false;
  * 1 = FX1
  * 2 = FX2
  */
- byte selectedFX = 0;
+ byte selectedFX = 1;
 
 /*
  * Scene
@@ -152,6 +144,29 @@ bool isRunningMT = false;
  byte pinLEDModeScene = 26;
  byte pinLEDModePattern = 27;
 
+ byte pinBtnBlink = 28;
+ byte pinLEDFlash = 29;
+ byte pinLEDFX1 = 30;
+ byte pinLEDFX2 = 31;
+
+ byte pinBtnScene = 32;
+ byte pinLEDScene1 = 33;
+ byte pinLEDScene2 = 34;
+
+ byte pinBtnPattern = 35;
+ byte pinLEDPattern1 = 36;
+ byte pinLEDPattern2 = 37;
+
+ byte pinBtnColor = 38;
+ byte pinLEDColorUni = 39;
+ byte pinLEDColorRB = 40;
+
+ byte pinBtnForce = 38;
+ byte pinLEDForce = 42;
+
+ byte pinBtnTab = 43;
+ byte pinLEDTab = 44;
+
 /*
  * Configuration
  */
@@ -159,12 +174,7 @@ bool isRunningMT = false;
  bool btnConfigState;
  bool lastBtnModeState;
  bool btnModeState;
- bool configMode = false;
-
-/*
- * Ext. Interfaces
- */
- byte lastMidiState = 0;
+ bool configMode = true;
 
 
 /*
@@ -222,9 +232,10 @@ class Hit {
     // Callculate hard threshold
     hardThreshMax = maxThreshold + ((1023 - maxThreshold) * hardHitThresh);
     hardThreshMin = minThreshold - (minThreshold * hardHitThresh);
-  
-  }
 
+    // Debug Threashold
+    if (debug == true) {  Serial.print("InputTrigger:: "); Serial.print(inputTrigger); Serial.print(" maxThreshold:: "); Serial.print(maxThreshold); Serial.print(" minThreshold:: "); Serial.println(minThreshold); }
+  }
 /*
  * Detect hit
  */
@@ -242,46 +253,45 @@ class Hit {
 
     byte hit = 0;
     unsigned long currentMillis = millis();
-    
-    /*
-      Serial.print(triggerSource);Serial.print(":::");
-      Serial.print(now);Serial.print(",");
-      Serial.print(lastHitTime[triggerSource]);Serial.print(",");
-    */
       
-      //Check sleeptime
-      if ((currentMillis - lastHitMillis) >= sleepTime) {
-        /*
-         * Sleeptime not active, check hit
-         */
-    
-        // Get analog input value
-        triggerValue = analogRead(inputTrigger);
-        //Serial.print(inputTrigger); Serial.print(":::");
-        //Serial.println(triggerValue);
-    
-        // Check if a hit was hitten
-        if ((triggerValue > maxThreshold) || (triggerValue < minThreshold)) {
-          /*
-           * hit, detected, check the it's a hard hit else it's soft
-           */
-           
-          if ((triggerValue > hardThreshMax) || (triggerValue < hardThreshMin)) {
-            
-            hit = 2;
-            
-          }
-          else {
-          
-            hit = 1;
-          
-          }    
-        }
-        lastHitMillis = currentMillis;
-      }
-      return hit;
-  }
+    //Check sleeptime
+    if ((currentMillis - lastHitMillis) >= sleepTime) {
+      /*
+       * Sleeptime not active, check hit
+       */
   
+      // Get analog input value
+      triggerValue = analogRead(inputTrigger);
+      if (debug == true) {  Serial.print("InputTrigger:: "); Serial.print(inputTrigger); Serial.print(" triggerValue:: "); Serial.println(triggerValue); }
+  
+      // Check if a hit was hitten
+      if ((triggerValue >= maxThreshold) || (triggerValue <= minThreshold)) {
+        /*
+         * hit, detected, check the it's a hard hit else it's soft
+         */
+         
+        if ((triggerValue > hardThreshMax) || (triggerValue < hardThreshMin)) {
+          
+          hit = 2;
+          
+        }
+        else {
+        
+          hit = 1;
+        
+        }
+        
+      lastHitMillis = currentMillis;    
+      }
+
+    }
+    else { //only for debugging
+      if (debug == true) {  Serial.print("InputTrigger:: "); Serial.print(inputTrigger); Serial.println(" Sleeptime active!! "); }
+    }
+      
+    return hit;
+    if (debug == true) {  Serial.print("InputTrigger:: "); Serial.print(inputTrigger); Serial.print(" hit:: "); Serial.println(hit); }
+  }
 };
 
 // Superclass Drum
@@ -297,8 +307,6 @@ class Drum {
   byte totalLEDColums;
   byte totalLEDRows;
   Adafruit_NeoPixel pixels;
-  byte midiNote;
-  byte lastMidiState;
   
   public:
   Drum(){ }
@@ -353,37 +361,6 @@ class Drum {
       }
     }
   }
-  void sendMidi(byte inHit){
-  byte midiState = inHit;
-  
-  // mIdi chanel 10 
-  // Note 50 High Tom 1
-  // Note 36 Bass Drum 1
-  // Note 47 Mid Tom 1
-  
-  if (midiState != lastMidiState) {
-    switch (midiState) {
-      case 0: // no Hit - tunr Midi note off
-        Serial.write(midiChannelOff);
-        Serial.write(midiNote);
-        Serial.write(midiVelocityOff);
-      break;
-      case 1: // soft hit - turn Midi note on
-        Serial.write(midiChannelOn);
-        Serial.write(midiNote);
-        Serial.write(midiVelocitySoft); //mf
-      break;
-      case 2: // hard Hit - tunr Midi note on
-        Serial.write(midiChannelOn);
-        Serial.write(midiNote);
-        Serial.write(midiVelocityHard); //fff
-      break;
-    }
-    lastMidiState = midiState;
-  }
-}
-
-
 };
 
 /*
@@ -404,7 +381,7 @@ class Tom : public Drum {
    * byte inTotalLEDRows -> total LED rows
    * byte inMidiNote -> midi Note
    */
-  Tom(Adafruit_NeoPixel inPixels, char inTypeDrum, byte inTotalLEDs, byte inTotalLEDColums, byte inTotalLEDRows,  byte inMidiNote){
+  Tom(Adafruit_NeoPixel inPixels, char inTypeDrum, byte inTotalLEDs, byte inTotalLEDColums, byte inTotalLEDRows){
     pixels = inPixels;
     totalLEDs = inTotalLEDs;
     totalLEDColums = inTotalLEDColums;
@@ -415,7 +392,7 @@ class Tom : public Drum {
     stateFX = 0;
     intStateFX = 1;
     typeDrum = inTypeDrum;
-    midiNote = inMidiNote;
+
   }
 
 /*
@@ -572,7 +549,7 @@ class BD : public Drum{
    * byte inTotalLEDRows -> total LED rows
    * byte inMidiNote -> midi Note
    */
-  BD(Adafruit_NeoPixel inPixels, char inTypeDrum, byte inTotalLEDs, byte inTotalLEDColums, byte inTotalLEDRows, byte inMidiNote){
+  BD(Adafruit_NeoPixel inPixels, char inTypeDrum, byte inTotalLEDs, byte inTotalLEDColums, byte inTotalLEDRows){
 
     pixels = inPixels;
     totalLEDs = inTotalLEDs;
@@ -586,7 +563,6 @@ class BD : public Drum{
     intStateFX = 1;
     stepFX = 0;
     typeDrum = inTypeDrum;
-    midiNote = inMidiNote;
 
   }
 
@@ -733,9 +709,9 @@ class BD : public Drum{
 };
 
 // Create the Toms and the BD
-BD bassdrumObj(pixelBD,'b',totalLEDsBD,totalLEDColumsBD,totalLEDRowsBD,midiNoteBD);
-Tom smallTomObj(pixelST,'s',totalLEDsST,totalLEDColumsST,totalLEDRowsST,midiNoteST);
-Tom middleTomObj(pixelMT,'m',totalLEDsMT,totalLEDColumsMT,totalLEDRowsMT,midiNoteMT);
+BD bassdrumObj(pixelBD,'b',totalLEDsBD,totalLEDColumsBD,totalLEDRowsBD);
+Tom smallTomObj(pixelST,'s',totalLEDsST,totalLEDColumsST,totalLEDRowsST);
+Tom middleTomObj(pixelMT,'m',totalLEDsMT,totalLEDColumsMT,totalLEDRowsMT);
 
 
 //Create Pointer
@@ -751,12 +727,7 @@ Hit hitMT(triggerMT,sleepTime,hitThresholdMT);
 
 void setup() {
 
- //Serial.begin(9600);          //  setup serial
-
- /*
-  * Setup Serial for Midi
-  */
- Serial2.begin(31250);
+ if ( debug == true) { Serial.begin(9600); } //Debug Serial
 
  /*
   * PinMode
@@ -768,11 +739,22 @@ void setup() {
   pinMode(pinLEDModeBlink, OUTPUT);
   pinMode(pinLEDModeScene, OUTPUT);
   pinMode(pinLEDModePattern, OUTPUT);
-
+  pinMode(pinLEDFlash, OUTPUT);
+  pinMode(pinLEDFX1, OUTPUT);
+  pinMode(pinLEDFX2, OUTPUT);
+  pinMode(pinLEDScene1, OUTPUT);
+  pinMode(pinLEDScene2, OUTPUT);
+  pinMode(pinLEDPattern1, OUTPUT);
+  pinMode(pinLEDPattern2, OUTPUT);
+  pinMode(pinLEDColorUni, OUTPUT);
+  pinMode(pinLEDColorRB, OUTPUT);
+  pinMode(pinLEDForce, OUTPUT);
+  pinMode(pinLEDTab, OUTPUT);
    
   bassdrum->start();
   middleTom->start();
   smallTom->start();
+
 
 }
 
@@ -785,6 +767,64 @@ void loop() {
     hitST.initialize();
     hitMT.initialize();
     initialized = true;
+
+  // Set initial LED States
+
+    digitalWrite(pinLEDConfig, HIGH);
+
+    switch (selectedMode){
+      case 0:  //Blink
+          digitalWrite(pinLEDModeBlink, HIGH);
+          
+          switch (selectedFX) {
+            case 0: // Flash
+              digitalWrite(pinLEDFlash, HIGH);
+            break;
+            case 1: // FX1
+              digitalWrite(pinLEDFX1, HIGH);
+            break;
+            case 2: // FX2
+              digitalWrite(pinLEDFX2, HIGH);
+            break;
+            default:
+            break;
+          }
+
+      
+      break;
+      case 1:
+        digitalWrite(pinLEDModeScene, HIGH);
+
+          switch (selectedScene) {
+            case 0: // Scene1
+              digitalWrite(pinLEDScene1, HIGH);
+            break;
+            case 1: // Scene2
+              digitalWrite(pinLEDScene2, HIGH);
+            break;
+            default:
+            break;
+          }
+      break;
+      case 2:
+        digitalWrite(pinLEDModePattern, HIGH);
+        
+          switch (selectedPattern) {
+            case 0: // Scene1
+              digitalWrite(pinLEDPattern1, HIGH);
+            break;
+            case 1: // Scene2
+              digitalWrite(pinLEDPattern2, HIGH);
+            break;
+            default:
+            break;
+          }
+      break;
+      default:
+      break;
+    }
+  
+    
   }
 
   /*
@@ -816,15 +856,11 @@ void loop() {
     configuration();
   }
   else {
-    byte hitDBnow = hitBD.detectHit();
-    byte hitSTnow = hitST.detectHit();
-    byte hitMTnow = hitMT.detectHit();
-    programmcontroller(hitDBnow, bassdrum);
-    bassdrum->sendMidi(hitDBnow);
-    programmcontroller(hitSTnow, smallTom);
-    smallTom->sendMidi(hitSTnow);
-    programmcontroller(hitMTnow, middleTom);
-    middleTom->sendMidi(hitMTnow);
+    
+    programmcontroller(hitBD.detectHit(), bassdrum);
+    programmcontroller(hitST.detectHit(), smallTom);
+    programmcontroller(hitMT.detectHit(), middleTom);
+
   }
 }
 
@@ -1214,8 +1250,6 @@ bool pattern(char inDrumType, char *inPattern) {
     default:
     break;
   }
-  Serial.print("patternFirstRound:::");Serial.print(patternFirstRound);
-  Serial.print("PatternMatch:::");Serial.print(patternMatch);
   return patternMatch;
 }
 
@@ -1232,10 +1266,6 @@ bool checkPattern(char *inPatternCue, char *inPattern){
   if (n == 0){
     patternMatch = true;
   }
-  Serial.print("inPatternCue:::");Serial.print(inPatternCue);Serial.print(":::END::inPatternCue:::");
-  Serial.print("inPattern:::");Serial.print(inPattern);Serial.print(":::END::inPattern:::");
-  
-  Serial.print(n);
   memset(inPatternCue,0,5);
   return patternMatch;
 }
