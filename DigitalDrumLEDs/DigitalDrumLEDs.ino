@@ -53,9 +53,9 @@ float hardHitThresh = 0.5;
 // Threshold values BD=Bassdrum, MT=MidTom, SM=SmallTom
 
 //Threshold in %
-byte hitThresholdBD = 5;
-byte hitThresholdST = 5;
-byte hitThresholdMT = 5;
+byte hitThresholdBD = 10;
+byte hitThresholdST = 10;
+byte hitThresholdMT = 10;
 
 /*
  * Define Patterns using DrumType
@@ -137,8 +137,8 @@ bool isRunningMT = false;
  * Console Buttons and LED Pins
  */
 
- byte pinBtnConfig = 34;
- byte pinLEDConfig = 22;
+ byte pinBtnConfig = 22;
+ byte pinLEDConfig = 23;
  byte pinBtnMode = 24;
  byte pinLEDModeBlink = 25;
  byte pinLEDModeScene = 26;
@@ -174,6 +174,12 @@ bool isRunningMT = false;
  bool btnConfigState;
  bool lastBtnModeState;
  bool btnModeState;
+ bool lastBtnBlinkState;
+ bool btnBlinkState;
+ bool lastBtnSceneState;
+ bool btnSceneState;
+ bool lastBtnPatternState;
+ bool btnPatternState;
  bool configMode = true;
 
 
@@ -739,17 +745,22 @@ void setup() {
   pinMode(pinLEDModeBlink, OUTPUT);
   pinMode(pinLEDModeScene, OUTPUT);
   pinMode(pinLEDModePattern, OUTPUT);
+  pinMode(pinBtnBlink, INPUT);
   pinMode(pinLEDFlash, OUTPUT);
   pinMode(pinLEDFX1, OUTPUT);
   pinMode(pinLEDFX2, OUTPUT);
+  pinMode(pinBtnScene, INPUT);
   pinMode(pinLEDScene1, OUTPUT);
   pinMode(pinLEDScene2, OUTPUT);
+  pinMode(pinBtnPattern, INPUT);
   pinMode(pinLEDPattern1, OUTPUT);
   pinMode(pinLEDPattern2, OUTPUT);
   pinMode(pinLEDColorUni, OUTPUT);
   pinMode(pinLEDColorRB, OUTPUT);
   pinMode(pinLEDForce, OUTPUT);
   pinMode(pinLEDTab, OUTPUT);
+
+
    
   bassdrum->start();
   middleTom->start();
@@ -872,6 +883,9 @@ void configuration() {
   unsigned long currentMillis = millis();
   
   btnModeState = digitalRead(pinBtnMode);
+  btnBlinkState = digitalRead(pinBtnBlink);
+  btnSceneState = digitalRead(pinBtnScene);
+  btnPatternState = digitalRead(pinBtnPattern);
 
   if (btnModeState != lastBtnModeState){
     if (btnModeState == LOW){
@@ -902,6 +916,90 @@ void configuration() {
     testMode();
   }
   lastBtnModeState = btnModeState;
+
+  switch (selectedMode) {
+
+    case 0: // Blink
+      if (btnBlinkState != lastBtnBlinkState){
+        if (btnBlinkState == LOW){
+          switch (selectedFX) {
+            case 0:
+              selectedFX = 1;
+              digitalWrite(pinLEDFlash, LOW);
+              digitalWrite(pinLEDFX1, HIGH);
+            break;
+            case 1:
+              selectedFX = 2;
+              digitalWrite(pinLEDFX1, LOW);
+              digitalWrite(pinLEDFX2, HIGH);
+            break;
+            case 2:
+              selectedFX = 0;
+              digitalWrite(pinLEDFX2, LOW);
+              digitalWrite(pinLEDFlash, HIGH);
+            break;
+            
+            default:
+            break;
+          }
+        }
+        delay(50);
+      }
+      lastBtnBlinkState = btnBlinkState;
+    break;
+
+    case 1: // Scene
+      if (btnSceneState != lastBtnSceneState){
+        if (btnSceneState == LOW){
+          switch (selectedScene) {
+            case 0:
+              selectedScene = 1;
+              digitalWrite(pinLEDScene1, LOW);
+              digitalWrite(pinLEDScene2, HIGH);
+            break;
+            case 1:
+              selectedScene = 0;
+              digitalWrite(pinLEDScene2, LOW);
+              digitalWrite(pinLEDScene1, HIGH);
+            break;
+            
+            default:
+            break;
+          }
+        }
+        delay(50);
+      }
+      lastBtnSceneState = btnSceneState;
+    break;
+
+    case 2: // Pattern
+      if (btnPatternState != lastBtnPatternState){
+        if (btnPatternState == LOW){
+          switch (selectedPattern) {
+            case 0:
+              selectedPattern = 1;
+              digitalWrite(pinLEDPattern1, LOW);
+              digitalWrite(pinLEDPattern2, HIGH);
+            break;
+            case 1:
+              selectedPattern = 0;
+              digitalWrite(pinLEDPattern2, LOW);
+              digitalWrite(pinLEDPattern1, HIGH);
+            break;
+            
+            default:
+            break;
+          }
+        }
+        delay(50);
+      }
+      lastBtnPatternState = btnPatternState;
+    break;
+    
+    default:
+    break;
+  }
+  
 }
 
 /*
